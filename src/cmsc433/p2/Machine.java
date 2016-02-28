@@ -9,15 +9,15 @@ package cmsc433.p2;
  */
 
 public class Machine {
-	
+
 	// Types of machines used in Ratsie's.  Recall that enum types are
 	// effectively "static" and "final", so each instance of Machine
 	// will use the same MachineType.
-	
+
 	public enum MachineType { fountain, fryer, grillPress, oven };
-	
+
 	// Converts Machine instances into strings based on MachineType.
-	
+
 	public String toString() {
 		switch (machineType) {
 		case fountain: 		return "Fountain";
@@ -27,7 +27,7 @@ public class Machine {
 		default:			return "INVALID MACHINE";
 		}
 	}
-	
+
 	public final MachineType machineType;
 	public final Food machineFoodType;
 	public final int capacity;
@@ -46,7 +46,7 @@ public class Machine {
 	public Machine(MachineType machineType, Food food, int capacityIn) {
 		this.machineType = machineType;
 		this.machineFoodType = food;
-		
+
 		//YOUR CODE GOES HERE...
 		this.capacity = capacityIn;
 
@@ -61,21 +61,35 @@ public class Machine {
 	 * the call can proceed.  You will need to implement some means to
 	 * notify the calling Cook when the food item is finished.
 	 */
-	public Object makeFood() throws InterruptedException {
-		// 
-		
+	public Object makeFood(Food food, int numItems) throws InterruptedException {
+		// At startup: 
+		Simulation.logEvent(SimulationEvent.machineStarting(this, food, numItems));
+		// When beginning to make a food item:
+		Simulation.logEvent(SimulationEvent.machineCookingFood(this, food));
+		// When done making a food item: 
+		Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
+
+
+		// SimulationEvent.machineEnding()
+
 		// TODO: If the machine is currently at full capacity, block
 		// TODO: Else
-			// TODO: Notify the calling cook
-			// TODO: Return
+		// 		TODO: Notify the calling cook
+
+		// 		When shut down, at the end of the simulation:
+		Simulation.logEvent(SimulationEvent.machineEnding(this));
+
+		// 		TODO: Return
+
+		return null;
 	}
 
 	//THIS MIGHT BE A USEFUL METHOD TO HAVE AND USE BUT IS JUST ONE IDEA
 	private class CookAnItem implements Runnable {
 		public void run() {
-			try {
-				// TODO: YOUR CODE GOES HERE...
-			} catch(InterruptedException e) { }
+//			try {
+//				// TODO: YOUR CODE GOES HERE...
+//			} catch(InterruptedException e) { }
 		}
 	}
 }

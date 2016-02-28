@@ -1,9 +1,12 @@
 package cmsc433.p2;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Random;
 
 /**
@@ -12,9 +15,21 @@ import java.util.Random;
  */
 public class Simulation {
 	// List to track simulation events during simulation
-	public static List<SimulationEvent> events;  
+	
+	private static final int NUM_MACHINES = 4;
 
-
+	public static List<SimulationEvent> events;
+	public static HashMap<String, Customer> customers;
+	public static List<Cook> cooks;
+	public static HashMap<Food, Machine> machines;
+	
+	public static HashMap<List<Food>, Integer> orderNumbers;
+	
+	public static Queue<List<Food>> ordersNew;
+	public static Queue<List<Food>> ordersInProgress;
+	public static Queue<List<Food>> ordersFinished;
+	
+	
 
 	/**
 	 * Used by other classes in the simulation to log events
@@ -48,8 +63,7 @@ public class Simulation {
 			) {
 
 		//This method's signature MUST NOT CHANGE.  
-
-
+		
 		//We are providing this events list object for you.  
 		//  It is the ONLY PLACE where a concurrent collection object is 
 		//  allowed to be used.
@@ -67,17 +81,32 @@ public class Simulation {
 
 
 		// Set things up you might need
-
+		customers = new HashMap<String, Customer>(numCustomers);
+		cooks = new ArrayList<Cook>(numCooks);
+		machines = new HashMap<Food, Machine>(machineCapacity);
+		
+		orderNumbers = new HashMap<List<Food>, Integer>();
+		
+		ordersNew = new PriorityQueue<List<Food>>();
+		ordersInProgress = new PriorityQueue<List<Food>>();
+		ordersFinished = new PriorityQueue<List<Food>>();
+		
 
 		// Start up machines
-
-
+		machines.put(FoodType.wings, new Machine(Machine.MachineType.fryer, FoodType.wings, machineCapacity));
+		machines.put(FoodType.pizza, new Machine(Machine.MachineType.oven, FoodType.pizza, machineCapacity));
+		machines.put(FoodType.sub, new Machine(Machine.MachineType.grillPress, FoodType.sub, machineCapacity));
+		machines.put(FoodType.soda, new Machine(Machine.MachineType.fountain, FoodType.soda, machineCapacity));
 
 		// Let cooks in
+		Thread[] cookThreads = new Thread[numCooks];
+		for (int i = 0; i < numCooks; i++) {
+			cookThreads[i] = new Thread(new Cook("Cook" + i));
+		}
 
 
 		// Build the customers.
-		Thread[] customers = new Thread[numCustomers];
+		Thread[] customerThreads = new Thread[numCustomers];
 		LinkedList<Food> order;
 		if (!randomOrders) {
 			order = new LinkedList<Food>();
@@ -85,14 +114,14 @@ public class Simulation {
 			order.add(FoodType.pizza);
 			order.add(FoodType.sub);
 			order.add(FoodType.soda);
-			for(int i = 0; i < customers.length; i++) {
-				customers[i] = new Thread(
+			for(int i = 0; i < customerThreads.length; i++) {
+				customerThreads[i] = new Thread(
 						new Customer("Customer " + (i+1), order)
 						);
 			}
 		}
 		else {
-			for(int i = 0; i < customers.length; i++) {
+			for(int i = 0; i < customerThreads.length; i++) {
 				Random rnd = new Random();
 				int wingsCount = rnd.nextInt(4);
 				int pizzaCount = rnd.nextInt(4);
@@ -111,7 +140,7 @@ public class Simulation {
 				for (int c = 0; c < sodaCount; c++) {
 					order.add(FoodType.soda);
 				}
-				customers[i] = new Thread(
+				customerThreads[i] = new Thread(
 						new Customer("Customer " + (i+1), order)
 				);
 			}
@@ -120,8 +149,8 @@ public class Simulation {
 
 		// Now "let the customers know the shop is open" by
 		//    starting them running in their own thread.
-		for(int i = 0; i < customers.length; i++) {
-			customers[i].start();
+		for(int i = 0; i < customerThreads.length; i++) {
+			customerThreads[i].start();
 			//NOTE: Starting the customer does NOT mean they get to go
 			//      right into the shop.  There has to be a table for
 			//      them.  The Customer class' run method has many jobs
@@ -143,10 +172,10 @@ public class Simulation {
 			// The easiest way to do this might be the following, where
 			// we interrupt their threads.  There are other approaches
 			// though, so you can change this if you want to.
-			for(int i = 0; i < cooks.length; i++)
-				cooks[i].interrupt();
-			for(int i = 0; i < cooks.length; i++)
-				cooks[i].join();
+			for(int i = 0; i < cookThreads.length; i++)
+				cookThreads[i].interrupt();
+			for(int i = 0; i < cookThreads.length; i++)
+				cookThreads[i].join();
 
 		}
 		catch(InterruptedException e) {
@@ -154,10 +183,10 @@ public class Simulation {
 		}
 
 		// Shut down machines
-
-
-
-
+		machines.remove(FoodType.wings);
+		machines.remove(FoodType.pizza);
+		machines.remove(FoodType.sub);
+		machines.remove(FoodType.soda);
 
 		// Done with simulation		
 		logEvent(SimulationEvent.endSimulation());

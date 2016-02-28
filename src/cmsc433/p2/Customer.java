@@ -13,9 +13,10 @@ public class Customer implements Runnable {
 	//JUST ONE SET OF IDEAS ON HOW TO SET THINGS UP...
 	private final String name;
 	private final List<Food> order;
-	private final int orderNum;    
+	private final int orderNumber;
 	
 	private static int runningCounter = 0;
+	private static Object runningCounterLock = new Object();
 
 	/**
 	 * You can feel free modify this constructor.  It must take at
@@ -25,7 +26,9 @@ public class Customer implements Runnable {
 	public Customer(String name, List<Food> order) {
 		this.name = name;
 		this.order = order;
-		this.orderNum = ++runningCounter;
+		synchronized(runningCounterLock) {
+			this.orderNumber = ++runningCounter;
+		}
 	}
 
 	public String toString() {
@@ -53,12 +56,12 @@ public class Customer implements Runnable {
 		
 
 		// Immediately before placing order:
-		Simulation.logEvent(SimulationEvent.customerPlacedOrder(this, order, orderNum));
+		Simulation.logEvent(SimulationEvent.customerPlacedOrder(this, order, orderNumber));
 		
 		// TODO: Place its order
 		
 		// After receiving order:
-		Simulation.logEvent(SimulationEvent.customerReceivedOrder(this, order, orderNum));
+		Simulation.logEvent(SimulationEvent.customerReceivedOrder(this, order, orderNumber));
 		
 		// Just before leaving the Ratsie’s:
 		Simulation.logEvent(SimulationEvent.customerLeavingRatsies(this));

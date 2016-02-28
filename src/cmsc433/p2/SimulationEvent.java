@@ -183,7 +183,7 @@ public class SimulationEvent {
 					   Food food, 
 					   int capacity) {
     	int[] params = new int[1];
-    	params[0] = capacity;	
+    	params[0] = capacity;
     	return new SimulationEvent(EventType.MachineStarting,
 				   null, null,
 				   machine,
