@@ -61,14 +61,14 @@ public class Machine {
 	 * the call can proceed.  You will need to implement some means to
 	 * notify the calling Cook when the food item is finished.
 	 */
-	public Object makeFood(Food food, int numItems) throws InterruptedException {
+	public Object makeFood(Food food, int numItems) {
 		// At startup: 
 		Simulation.logEvent(SimulationEvent.machineStarting(this, food, numItems));
 		// When beginning to make a food item:
 		Simulation.logEvent(SimulationEvent.machineCookingFood(this, food));
 		// When done making a food item: 
 		Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
-
+		
 
 		// SimulationEvent.machineEnding()
 

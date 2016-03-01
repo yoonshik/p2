@@ -14,7 +14,7 @@ public class Cook implements Runnable {
 	private static final int SUB = 2;
 	private static final int SODA = 3;
 	private static final int FOOD_TYPE_COUNT = 4;
-	
+
 	private final String name;
 
 	/**
@@ -47,92 +47,80 @@ public class Cook implements Runnable {
 	public void run() {
 
 		Simulation.logEvent(SimulationEvent.cookStarting(this));
-		try {
-			while(true) {
-				
-				List<Food> order;
-				
-				int orderNumber;
-				// TODO: Try to retrieve orders placed by Customers
-				synchronized(Simulation.ordersNew) {
-					if (Simulation.ordersNew.isEmpty()) {
-						Thread.sleep(50);
-						continue;
-					}
-					order = Simulation.ordersNew.remove();
-				}
-				synchronized(Simulation.ordersInProgress) {
-					Simulation.ordersInProgress.add(order);
-				}
-				
-				synchronized(Simulation.orderNumbers) {
-					orderNumber = Simulation.orderNumbers.get(order);
-				}
-				
-				// TODO: Upon starting an order:
-				Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, order, orderNumber));				
-				
-				int[] foodCount = new int[FOOD_TYPE_COUNT];
-				for (Food food : order) {
-					if (food == FoodType.wings) {
-						++foodCount[WING];
-					} else if (food == FoodType.pizza) {
-						++foodCount[PIZZA];
-					} else if (food == FoodType.sub) {
-						++foodCount[SUB];
-					} else if (food == FoodType.soda) {
-						++foodCount[SODA];
-					} else {
-						throw new UnsupportedOperationException("Unknown food type: " + food.name);
-					}
-				}
-				
-				// TODO: For each List<Food> order
-				for (int i = 0; i < FOOD_TYPE_COUNT; i++) {
-					
-					Food food;
-					switch (i) {
-					case WING: food = FoodType.wings;
-					case PIZZA: food = FoodType.pizza;
-					case SUB: food = FoodType.sub;
-					case SODA: food = FoodType.soda;
-					break;
-					default: throw new UnsupportedOperationException("Unknown food count: " + i);
-					}
-					
-					// Find appropriate machine
-					Machine machine = Simulation.machines.get(food);
-					
-					// Submit each food item
-					synchronized(machine) {
-						machine.makeFood(food, foodCount[i]);
-					}
-					
-					// Upon submitted request to food machine:
-					Simulation.logEvent(SimulationEvent.cookStartedFood(this, food, orderNumber));
 
-					// Upon receiving a completed food item:
-					Simulation.logEvent(SimulationEvent.cookFinishedFood(this, food, orderNumber));
-					
-					// Upon completing an order:
-					Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, orderNumber));
-					
-					// TODO: Once all machines have produced the desired food,  
-					// notify the Customer since the order is complete.
-					
-				}
-					
-		
-					
-					
-				
-				// Just before terminating:
-				Simulation.logEvent(SimulationEvent.cookEnding(this));
-				
-			}
-		} catch(InterruptedException e) {
-			// If the cook is interrupted, terminate since all customers are done. 
-			Simulation.logEvent(SimulationEvent.cookEnding(this));
+		while(true) {
+			List<Food> order; 
+			int orderNumber;
+
+			// TODO: Try to retrieve orders placed by Customers
+			
+			order = Ratsies.singleton.getNextOrder();
+			orderNumber = Ratsies.singleton.getOrderNumber(order);
+
+			processOrder(order, orderNumber);
 		}
+
+	}
+
+	private void processOrder(List<Food> order, int orderNumber){
+
+		synchronized(order) {
+			// TODO: Upon starting an order:
+			Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, order, orderNumber));			
+
+			int[] foodCount = new int[FOOD_TYPE_COUNT];
+			for (Food food : order) {
+				if (food == FoodType.wings) {
+					++foodCount[WING];
+				} else if (food == FoodType.pizza) {
+					++foodCount[PIZZA];
+				} else if (food == FoodType.sub) {
+					++foodCount[SUB];
+				} else if (food == FoodType.soda) {
+					++foodCount[SODA];
+				} else {
+					throw new UnsupportedOperationException("Unknown food type: " + food.name);
+				}
+			}
+
+			// TODO: For each List<Food> order
+			for (int i = 0; i < FOOD_TYPE_COUNT; i++) {
+				Food food;
+				switch (i) {
+				case WING: food = FoodType.wings;
+				case PIZZA: food = FoodType.pizza;
+				case SUB: food = FoodType.sub;
+				case SODA: food = FoodType.soda;
+				break;
+				default: throw new UnsupportedOperationException("Unknown food count: " + i);
+				}
+
+				// Find appropriate machine
+				Machine machine = Ratsies.singleton.machines.get(food);
+
+				// Submit each food item
+				synchronized(machine) {
+					machine.makeFood(food, foodCount[i]);
+				}
+
+				// Upon submitted request to food machine:
+				Simulation.logEvent(SimulationEvent.cookStartedFood(this, food, orderNumber));
+
+				// Upon receiving a completed food item:
+				Simulation.logEvent(SimulationEvent.cookFinishedFood(this, food, orderNumber));
+
+				// Upon completing an order:
+				Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, orderNumber));
+
+				// TODO: Once all machines have produced the desired food,  
+				// notify the Customer since the order is complete.
+				order.notify();
+
+			}
+		}
+
+
+		// Just before terminating:
+		Simulation.logEvent(SimulationEvent.cookEnding(this));
 	}
 }

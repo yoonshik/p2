@@ -2,6 +2,7 @@ package cmsc433.p2;
 
 import java.util.List;
 
+
 /**
  * Customers are simulation actors that have two fields: a name, and a list
  * of Food items that constitute the Customer's order.  When running, an
@@ -46,19 +47,24 @@ public class Customer implements Runnable {
 		// Before entering Ratsie's
 		Simulation.logEvent(SimulationEvent.customerStarting(this));
 		
-		
-		
-		// TODO: If Ratsie's has a free table, enter Ratsie's
-		
+		// TODONE: If Ratsie's has a free table, enter Ratsie's
+		Ratsies.singleton.enterRatsies(this);
 		
 		//After entering Ratsie’s: 
 		Simulation.logEvent(SimulationEvent.customerEnteredRatsies(this));
 		
-
 		// Immediately before placing order:
 		Simulation.logEvent(SimulationEvent.customerPlacedOrder(this, order, orderNumber));
 		
-		// TODO: Place its order
+		// TODONE: Place its order
+		synchronized(order) {
+			Ratsies.singleton.submitOrder(this, order, orderNumber);
+			try {
+				order.wait();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		
 		// After receiving order:
 		Simulation.logEvent(SimulationEvent.customerReceivedOrder(this, order, orderNumber));
@@ -66,7 +72,8 @@ public class Customer implements Runnable {
 		// Just before leaving the Ratsie’s:
 		Simulation.logEvent(SimulationEvent.customerLeavingRatsies(this));
 		
-		// TODO: When the order is complete, leave Ratsie's
+		// TODONE: When the order is complete, leave Ratsie's
+		Ratsies.singleton.leaveRatsies(this);
 		
 		
 	}
