@@ -1,15 +1,11 @@
 package cmsc433.p2;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.Random;
 
 public class Ratsies {
@@ -20,7 +16,6 @@ public class Ratsies {
 	private int numTables;
 	private int machineCapacity;
 	private boolean randomOrders;
-	private int numOrders;
 	private int numFinished;
 
 	public List<Customer> tables;
@@ -32,13 +27,13 @@ public class Ratsies {
 
 	public LinkedHashSet<Integer> ordersNew;
 	public LinkedHashSet<Integer> ordersInProgress;
+	public LinkedHashSet<Integer> ordersFinished;
 
 	private Thread[] cookThreads;
 	private Thread[] customerThreads;
 
 	private Object numFinishedLock;
 
-	private Object numOrdersLock;
 
 	public Ratsies(int numCustomers, int numCooks,
 			int numTables, 
@@ -55,20 +50,19 @@ public class Ratsies {
 		this.numTables = numTables;
 		this.machineCapacity = machineCapacity;
 		this.randomOrders = randomOrders;
-		this.numOrders = 0;
 		this.numFinished = 0;
 		this.numFinishedLock = new Object();
-		this.numOrdersLock = new Object();
 
 		// Set things up you might need
 		tables = new ArrayList<Customer>(numTables);
-		machines = new HashMap<Food, Machine>(machineCapacity);
+		machines = new HashMap<Food, Machine>(this.machineCapacity);
 
 		ordersByOrderNumber = new HashMap<Integer, List<Food>>();
 		orderLocks = new HashMap<Integer, Object>();
 
 		ordersNew = new LinkedHashSet<Integer>();
 		ordersInProgress = new LinkedHashSet<Integer>();
+		ordersFinished = new LinkedHashSet<Integer>();
 		
 		machines.put(FoodType.wings, new Machine(Machine.MachineType.fryer, FoodType.wings, machineCapacity));
 		machines.put(FoodType.pizza, new Machine(Machine.MachineType.oven, FoodType.pizza, machineCapacity));
@@ -251,9 +245,6 @@ public class Ratsies {
 				this.notify();
 				this.notify();
 			}
-			synchronized(numOrdersLock) {
-				numOrders++;
-			}
 			ordersNew.notifyAll();
 			return true;
 		}
@@ -278,19 +269,23 @@ public class Ratsies {
 	public void cookCompletedOrder(Cook cook, int orderNumber) {
 		synchronized(Ratsies.singleton.getOrderLock(orderNumber)) {
 			synchronized(ordersInProgress) {
-				System.out.println("[DEBUG:] Removing " + orderNumber + " from ordersInProgress");
+//				System.out.println("[DEBUG:] Removing " + orderNumber + " from ordersInProgress");
 				ordersInProgress.remove((Object)orderNumber);
-				System.out.println("[DEBUG:] ordersInProgress empty: " + ordersInProgress.isEmpty());
-				System.out.println("[DEBUG:] ordersInProgress contents: " + ordersInProgress.toString());
+//				System.out.println("[DEBUG:] ordersInProgress empty: " + ordersInProgress.isEmpty());
+//				System.out.println("[DEBUG:] ordersInProgress contents: " + ordersInProgress.toString());
+				
+				synchronized(ordersFinished) {
+					ordersFinished.add(orderNumber);
+				}
 				
 				synchronized(numFinishedLock) {
 					numFinished++;
-					System.out.println("[DEBUG:] " + numFinished);
+//					System.out.println("[DEBUG:] " + numFinished);
 				}
 				// Once all machines have produced the desired food,
 				// notify the Customer since the order is complete.				
 			}
-			System.out.println("[DEBUG:] Notifying " + orderNumber + " "+ getOrderLock(orderNumber));
+//			System.out.println("[DEBUG:] Notifying " + orderNumber + " "+ getOrderLock(orderNumber));
 			getOrderLock(orderNumber).notifyAll();
 		}
 	}
@@ -349,10 +344,8 @@ public class Ratsies {
 	
 	public boolean orderInProgress(int orderNumber) {
 		synchronized(getOrderLock(orderNumber)) {
-			synchronized(ordersNew){
-				synchronized(ordersInProgress) {
-					return (ordersNew.contains(orderNumber) || ordersInProgress.contains(orderNumber));
-				}
+			synchronized(ordersFinished) {
+				return !ordersFinished.contains(orderNumber);
 			}
 		}
 	}

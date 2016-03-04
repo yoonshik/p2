@@ -115,7 +115,7 @@ public class Cook implements Runnable {
 					
 					Ratsies.singleton.cookStartedFood(this, orderNumber);
 					
-					Thread thread = machine.makeFood(this, food);
+					Thread thread = machine.makeFood(food);
 					makeFoodThreads.get(orderNumber).get(food).add(thread);
 				}
 			}

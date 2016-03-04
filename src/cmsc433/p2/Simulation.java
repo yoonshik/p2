@@ -93,12 +93,12 @@ public class Simulation {
 		int machineCapacity = new Integer(args[3]).intValue();
 		boolean randomOrders = new Boolean(args[4]);
 		 */
-		int numCustomers = 50;
+		int numCustomers = 1000;
 		int numCooks = 25;
-		int numTables = 30;
-		int machineCapacity = 20;
-		boolean randomOrders = false;
-
+		int numTables = 50;
+		int machineCapacity = 500;
+		boolean randomOrders = true;
+		
 		// Run the simulation and then 
 		//   feed the result into the method to validate simulation.
 		System.out.println("Did it work? " + 

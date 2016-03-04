@@ -1,9 +1,9 @@
 package cmsc433.p2;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
+
+import cmsc433.p2.SimulationEvent;
 
 
 /**
@@ -11,19 +11,18 @@ import java.util.List;
  */
 public class Validate {
 	
-	private enum OrderStatus {
-		Placed,
-		Cooking,
-		Complete
-	};
+	private static final int COOK_STARTING = 0;
+	private static final int COOK_RECEIVED_ORDER = 1;
+	private static final int COOK_STARTED_FOOD = 2;
+	private static final int COOK_FINISHED_FOOD = 3;
+	private static final int COOK_COMPLETED_ORDER = 4;
+	private static final int COOK_FINISHED = 5;
 	
-	private enum CustomerStatus {
-		Created,
-		Entered,
-		PlacedOrder,
-		ReceivedOrder,
-		Left
-	};
+	private static final int CUSTOMER_STARTING = 0;
+	private static final int CUSTOMER_ENTERED = 1;
+	private static final int CUSTOMER_PLACED_ORDER = 2;
+	private static final int CUSTOMER_RECEIVED_ORDER = 3;
+	private static final int CUSTOMER_LEFT = 4;
 	
 	private static class InvalidSimulationException extends Exception {
 		private static final long serialVersionUID = 1L;
@@ -51,6 +50,143 @@ public class Validate {
 	 */
 	public static boolean validateSimulation(List<SimulationEvent> events) {
 		try {
+			check(events.get(0).event == SimulationEvent.EventType.SimulationStarting,
+					"Simulation didn't start with initiation event");
+
+			int numCustomers = events.get(0).simParams[0];
+			int numCooks = events.get(0).simParams[1];
+			int numTables = events.get(0).simParams[2];
+			int capacity = events.get(0).simParams[3];
+
+			check(events.get(events.size()-1).event == 
+					SimulationEvent.EventType.SimulationEnded,
+					"Simulation didn't end with termination event");
+
+			int numCustomersSim = 0, numCooksSim = 0;
+
+			int numDinersCount = 0;
+
+			int numCurrentOrders = 0;
+
+			int numWorkingOrders = 0;
+			
+			int numWorkingFood = 0;
+			
+			int numWings = 0, numPizza = 0, numSub = 0, numSoda = 0;
+			
+			HashMap<Customer, Integer> customerStatus = new HashMap<Customer, Integer>();
+			HashMap<Cook, Integer> cookStatus = new HashMap<Cook, Integer>();
+			
+			int numTotalOrders = 0;
+			
+			for (int i = 0; i < events.size(); i++) {
+				SimulationEvent event = events.get(i);
+				switch (event.event) {
+				/* General events */
+				case SimulationStarting:
+					break;
+				case SimulationEnded:
+					break;
+					/* Customer events */
+				case CustomerStarting:
+					numCustomersSim++;
+					customerStatus.put(event.customer, CUSTOMER_STARTING);
+				break;
+				case CustomerEnteredRatsies:
+					numDinersCount++;
+					check(numDinersCount<=numCustomers, "More customers dining in than defined. " + event.customer + ", " + numDinersCount);
+					check(customerStatus.get(event.customer) == CUSTOMER_STARTING, "Customer entered without starting. " + event.customer + ", " + customerStatus.get(event.customer));
+					customerStatus.put(event.customer, CUSTOMER_ENTERED);
+				break;
+				case CustomerPlacedOrder:
+					numCurrentOrders++;
+					numTotalOrders++;
+					check(numCurrentOrders<=numTables, "More orders than there are tables. " + event.customer + ", " + numCurrentOrders + "/" + numTables);
+					check(customerStatus.get(event.customer) == CUSTOMER_ENTERED, "Customer ordered without entering. " + event.customer + ", " + customerStatus.get(event.customer));
+					customerStatus.put(event.customer, CUSTOMER_PLACED_ORDER);
+					break;
+				case CustomerReceivedOrder:
+					numCurrentOrders--;
+					check(customerStatus.get(event.customer) == CUSTOMER_PLACED_ORDER, "Customer received order without ordering. " + event.customer + ", " + customerStatus.get(event.customer));
+					customerStatus.put(event.customer, CUSTOMER_RECEIVED_ORDER);
+					break;
+				case CustomerLeavingRatsies: 
+					numDinersCount--;
+					check(customerStatus.get(event.customer) == CUSTOMER_RECEIVED_ORDER, "Customer left without receiving order. " + event.customer + ", " + customerStatus.get(event.customer));
+					customerStatus.put(event.customer, CUSTOMER_LEFT);
+				break;
+				/* Cook Events */
+				case CookStarting: 
+					numCooksSim++;
+					cookStatus.put(event.cook, COOK_STARTING);
+					break;
+				case CookReceivedOrder: 
+					numWorkingOrders++;
+					check(numWorkingOrders<=numCooks, "More orders being worked on than there are cooks. " + event.cook + ", " + numWorkingOrders + "/" + numCooks);
+					check(cookStatus.get(event.cook) == COOK_STARTING || cookStatus.get(event.cook) == COOK_COMPLETED_ORDER || cookStatus.get(event.cook) == COOK_FINISHED, 
+							"Cook received order without starting. " + event.cook + ", " + cookStatus.get(event.cook));
+					cookStatus.put(event.cook, COOK_RECEIVED_ORDER);
+					break;
+				case CookStartedFood:
+					check(cookStatus.get(event.cook) == COOK_RECEIVED_ORDER || cookStatus.get(event.cook) == COOK_STARTED_FOOD, 
+					"Cook started food without receiving order. " + event.cook + ", " + cookStatus.get(event.cook));
+					cookStatus.put(event.cook, COOK_STARTED_FOOD);
+					break;
+				case CookFinishedFood:
+					check(cookStatus.get(event.cook) == COOK_STARTED_FOOD || cookStatus.get(event.cook) == COOK_FINISHED_FOOD, 
+					"Cook finished food without starting food. " + event.cook + ", " + cookStatus.get(event.cook));
+					cookStatus.put(event.cook, COOK_FINISHED_FOOD);
+					break;
+				case CookCompletedOrder:
+					check(cookStatus.get(event.cook) == COOK_RECEIVED_ORDER || cookStatus.get(event.cook) == COOK_FINISHED_FOOD,
+					"Cook completed order without finishing food. " + event.cook + ", " + cookStatus.get(event.cook) + " orderNumber: " + event.orderNumber);
+					cookStatus.put(event.cook, COOK_COMPLETED_ORDER);
+					numWorkingOrders--;
+				break;
+				case CookEnding:
+					cookStatus.put(event.cook, COOK_FINISHED);
+					break;
+					/* Machine events */
+				case MachineStarting:
+					break;
+				case MachineStartingFood:
+					numWorkingFood++;
+					check(numWorkingFood<=4*capacity, "More food items being worked on than machine capacity. " + event.machine + ", " + numWorkingFood + "/" + (4*capacity));
+					if (event.machine.machineFoodType == FoodType.wings) {
+						numWings++;
+						check(numWings<=capacity, "More wings being worked on than machine capacity. " + event.machine + ", " + numWings + "/" + capacity);
+					} else if (event.machine.machineFoodType == FoodType.sub) {
+						numSub++;
+						check(numSub<=capacity, "More subs being worked on than machine capacity. " + event.machine + ", " + numSub + "/" + capacity);
+					} else if (event.machine.machineFoodType == FoodType.pizza) {
+						numPizza++;
+						check(numPizza<=capacity, "More pizzas being worked on than machine capacity. " + event.machine + ", " + numPizza + "/" + capacity);
+					} else if (event.machine.machineFoodType == FoodType.soda) {
+						numSoda++;
+						check(numSoda<=capacity, "More sodas being worked on than machine capacity. " + event.machine + ", " + numSoda + "/" + capacity);
+					}
+					break;
+				case MachineDoneFood:
+					numWorkingFood--;
+					if (event.machine.machineFoodType == FoodType.wings) {
+						numWings--;
+					} else if (event.machine.machineFoodType == FoodType.sub) {
+						numSub--;
+					} else if (event.machine.machineFoodType == FoodType.pizza) {
+						numPizza--;
+					} else if (event.machine.machineFoodType == FoodType.soda) {
+						numSoda--;
+					}
+					break;
+				case MachineEnding:   
+					break;
+				}
+
+			}
+
+			check(numCustomers == numCustomersSim, "More customers than defined.");
+			check(numCooks == numCooksSim, "More cooks than defined.");
+			check(numTotalOrders == numCustomers, "More orders than customers.");
 
 			/* In P2 you will write validation code for things such as:
 				Should not have more eaters than specified
@@ -62,189 +198,6 @@ public class Validate {
 				Eater should not place more than one order
 				Cook should not work on order before it is placed
 			 */
-			
-			// Create a list of events that we will modify, remove the starting and ending events
-			ArrayList<SimulationEvent> realEvents = new ArrayList<SimulationEvent>();
-			realEvents.addAll(events);	
-			
-			int expectedNumCooks = 0;
-			int expectedNumCustomer = 0;
-			
-			int machineCapacity = 0;
-			int restaurantCapacity = 0;
-			int restaurantUsage = 0;
-			
-			HashSet<String> cooks = new HashSet<String>();
-			HashMap<Integer, OrderStatus> orderStatus = new HashMap<Integer, OrderStatus>();
-			HashMap<String, CustomerStatus> customerStatus = new HashMap<String, CustomerStatus>();
-			HashMap<Food, Integer> machineStatus = new HashMap<Food, Integer>();
-			
-			Integer index = 0;
-			String currName;
-			Integer currOrderNum;
-			Integer machineUsage;
-			for (SimulationEvent currEvent: realEvents) {
-				switch(currEvent.event) {
-					case CustomerStarting:
-						currName = currEvent.customer.getName();
-						check(customerStatus.size() < expectedNumCustomer, "Too many customers created");
-
-						check(customerStatus.put(currName, CustomerStatus.Created) == null,
-							"Duplicate Customer: " + currName);
-						
-					    break;
-					case CustomerEnteredRatsies:
-						currName = currEvent.customer.getName();
-						
-						check(restaurantUsage < restaurantCapacity, "Too many customers entered");
-						
-						check(
-							customerStatus.put(currName, CustomerStatus.Entered) == CustomerStatus.Created,
-							"Customer entered Ratsies before being created"
-						);
-					    break;
-					case CustomerPlacedOrder:
-						currName = currEvent.customer.getName();
-						currOrderNum = currEvent.orderNumber;
-						check(
-							customerStatus.put(currName, CustomerStatus.PlacedOrder) == CustomerStatus.Entered,
-							"Customer Placed Order before entering"
-						);
-						
-						check(
-							orderStatus.put(currOrderNum, OrderStatus.Placed) == null,
-							"Duplicate Order"
-						);
-						
-					    break;
-					case CustomerReceivedOrder:
-						currName = currEvent.customer.getName();
-						currOrderNum = currEvent.orderNumber;
-						
-						check(
-							customerStatus.put(currName, CustomerStatus.ReceivedOrder) == CustomerStatus.PlacedOrder,
-							"Customer received order before placing it"
-						);
-						
-						check(
-							orderStatus.get(currOrderNum) == OrderStatus.Complete,
-							"Customer got order before completion " + currOrderNum
-						);
-						
-					    break;
-					case CustomerLeavingRatsies:
-						currName = currEvent.customer.getName();
-						
-						check(
-							customerStatus.put(currName, CustomerStatus.Left) == CustomerStatus.ReceivedOrder,
-							"Customer left before getting order"
-						);
-						
-						restaurantUsage -= 1;
-					    break;
-					case CookStarting:
-						currName = currEvent.cook.getName();
-						check(!cooks.contains(currName),
-							"Duplicate Cook: " + currName);
-						
-						check(cooks.size() < expectedNumCooks, "Too many cooks created");
-						
-						cooks.add(currName);
-					    break;
-					case CookReceivedOrder:
-						currName = currEvent.cook.getName();
-						currOrderNum = currEvent.orderNumber;
-						
-						check(cooks.contains(currName), "Nonexistent cook working on order");
-						check(
-							orderStatus.put(currOrderNum, OrderStatus.Cooking) == OrderStatus.Placed,
-							"Orders started cooking before customer placed it"	
-						);
-					    break;
-					case CookStartedFood: case CookFinishedFood:
-						currName = currEvent.cook.getName();
-						currOrderNum = currEvent.orderNumber;
-						
-						check(cooks.contains(currName), "Nonexistent cook working on order");
-						check(
-							orderStatus.get(currOrderNum) == OrderStatus.Cooking,
-							"Cook started/finished food before starting order"	
-						);
-					    break;
-					case CookCompletedOrder:
-						currName = currEvent.cook.getName();
-						currOrderNum = currEvent.orderNumber;
-						
-						check(cooks.contains(currName), "Nonexistent cook working on order");
-						check(
-							orderStatus.put(currOrderNum, OrderStatus.Complete) == OrderStatus.Cooking,
-							"Cook completed order before starting cooking"	
-						);
-					    break;
-					case CookEnding:
-						currName = currEvent.cook.getName();
-						check(cooks.contains(currName), "Nonexistent cook Ended");
-					    break;
-					case MachineStarting:
-						check(
-							machineStatus.put(currEvent.machine.machineFoodType, 0) == null,
-							"Duplicate machine type: " + currEvent.machine.machineFoodType.name
-						);
-					    break;
-					case MachineStartingFood:
-						machineUsage = machineStatus.get(currEvent.machine.machineFoodType);
-						
-						check(machineUsage != null, "Nonexistent machine");
-						
-						check(
-							machineUsage < machineCapacity,
-							"Machine Exceeded Capacity: " + currEvent.machine.machineFoodType.name
-						);
-						
-						machineStatus.put(currEvent.machine.machineFoodType, machineUsage + 1);
-					    break;
-					case MachineDoneFood:
-						machineUsage = machineStatus.get(currEvent.machine.machineFoodType);
-
-						check(machineUsage != null, "Nonexistent machine");
-						
-						check(
-							machineUsage <= machineCapacity && machineUsage != 0,
-							"Invalid machine usage: " + currEvent.machine.machineFoodType.name
-						);
-						
-						machineStatus.put(currEvent.machine.machineFoodType, machineUsage - 1);
-					    break;
-					case MachineEnding:
-						machineUsage = machineStatus.get(currEvent.machine.machineFoodType);
-
-						check(machineUsage != null, "Nonexistent machine");
-						check(machineUsage == 0, "Invalid Machine Usage. Shutting down, food should be done");
-					    break;
-					case SimulationEnded:
-						check(index == realEvents.size() - 1, 
-							"Simulation didn't end with termination event");
-						break;
-					case SimulationStarting:
-						check(index == 0, "Simulation didn't start with initiation event");
-						
-						
-						int [] params = currEvent.simParams;
-						
-						expectedNumCustomer = params[0];
-						expectedNumCooks = params[1];
-						
-						restaurantCapacity = params[2];
-						machineCapacity = params[3];
-						
-						break;
-					default:
-						check(false, "Invalid SimulationEvent type");
-						break;
-				}
-				
-				index += 1;
-			}
 
 			return true;
 		} catch (InvalidSimulationException e) {
