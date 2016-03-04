@@ -1,15 +1,8 @@
 package cmsc433.p2;
 
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.PriorityQueue;
-import java.util.Queue;
-import java.util.Random;
-import cmsc433.p2.Food;
 
 /**
  * Simulation is the main class used to run the simulation.  You may
@@ -56,26 +49,21 @@ public class Simulation {
 
 		
 		
-		//This method's signature MUST NOT CHANGE.  
+		//This method's signature MUST NOT CHANGE.
 		
 		//We are providing this events list object for you.  
 		//  It is the ONLY PLACE where a concurrent collection object is 
 		//  allowed to be used.
 		events = Collections.synchronizedList(new ArrayList<SimulationEvent>());
 
-
-
-
-		// Start the simulation
-		logEvent(SimulationEvent.startSimulation(numCustomers,
-				numCooks,
-				numTables,
-				machineCapacity));
+		logEvent(SimulationEvent.startSimulation(numCustomers, numCooks, numTables, machineCapacity));
 		
 		Ratsies ratsies = new Ratsies(numCustomers,
 				numCooks,
 				numTables,
 				machineCapacity, randomOrders);
+		
+		ratsies.runSimulation();
 		
 		// Done with simulation		
 		logEvent(SimulationEvent.endSimulation());
@@ -105,10 +93,10 @@ public class Simulation {
 		int machineCapacity = new Integer(args[3]).intValue();
 		boolean randomOrders = new Boolean(args[4]);
 		 */
-		int numCustomers = 10;
-		int numCooks =1;
-		int numTables = 5;
-		int machineCapacity = 4;
+		int numCustomers = 50;
+		int numCooks = 25;
+		int numTables = 30;
+		int machineCapacity = 20;
 		boolean randomOrders = false;
 
 		// Run the simulation and then 
@@ -123,9 +111,6 @@ public class Simulation {
 						)
 				);
 	}
-
-	
-
 }
 
 

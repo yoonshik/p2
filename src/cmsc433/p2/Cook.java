@@ -1,6 +1,7 @@
 package cmsc433.p2;
 
-import java.sql.Time;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -17,6 +18,10 @@ public class Cook implements Runnable {
 
 	private final String name;
 
+	private HashMap<Food, Machine> machines;
+
+	private HashMap<Integer, HashMap<Food, LinkedList<Thread>>> makeFoodThreads;
+
 	/**
 	 * You can feel free to modify this constructor.  It must
 	 * take at least the name, but may take other parameters
@@ -24,8 +29,11 @@ public class Cook implements Runnable {
 	 *
 	 * @param: the name of the cook
 	 */
-	public Cook(String name) {
+	public Cook(String name, HashMap<Food, Machine> machines) {
 		this.name = name;
+		this.machines = machines;
+		
+		this.makeFoodThreads = new HashMap<Integer, HashMap<Food, LinkedList<Thread>>>();
 	}
 
 	public String toString() {
@@ -45,28 +53,37 @@ public class Cook implements Runnable {
 	 * terminates.
 	 */
 	public void run() {
-
 		Simulation.logEvent(SimulationEvent.cookStarting(this));
+		try {
+			while (true) {
+				List<Food> order = null;
+				Integer orderNumber;
+				
+				synchronized(Ratsies.singleton.ordersNew) {
+					while(!Ratsies.singleton.newOrderAvailable()) {
+						Ratsies.singleton.ordersNew.wait();
+					}
+					// Try to retrieve orders placed by Customers
+					orderNumber = Ratsies.singleton.getNextOrder();
+				}
+				
+				order = Ratsies.singleton.getOrder(orderNumber);
 
-		while(true) {
-			List<Food> order; 
-			int orderNumber;
-
-			// TODO: Try to retrieve orders placed by Customers
-			
-			order = Ratsies.singleton.getNextOrder();
-			orderNumber = Ratsies.singleton.getOrderNumber(order);
-
-			processOrder(order, orderNumber);
+				processOrder(order, orderNumber);
+			}
+		} catch (InterruptedException e) {
+			// Just before terminating:
+			Simulation.logEvent(SimulationEvent.cookEnding(this));
 		}
-
 	}
 
-	private void processOrder(List<Food> order, int orderNumber){
-
-		synchronized(order) {
-			// TODO: Upon starting an order:
-			Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, order, orderNumber));			
+	private void processOrder(List<Food> order, Integer orderNumber) throws InterruptedException{
+		
+		synchronized(Ratsies.singleton.getOrderLock(orderNumber)) {
+			// Upon starting an order:
+			Simulation.logEvent(SimulationEvent.cookReceivedOrder(this, order, orderNumber));
+			
+			makeFoodThreads.put(orderNumber, new HashMap<Food, LinkedList<Thread>>());
 
 			int[] foodCount = new int[FOOD_TYPE_COUNT];
 			for (Food food : order) {
@@ -82,45 +99,54 @@ public class Cook implements Runnable {
 					throw new UnsupportedOperationException("Unknown food type: " + food.name);
 				}
 			}
-
-			// TODO: For each List<Food> order
+			
 			for (int i = 0; i < FOOD_TYPE_COUNT; i++) {
-				Food food;
-				switch (i) {
-				case WING: food = FoodType.wings;
-				case PIZZA: food = FoodType.pizza;
-				case SUB: food = FoodType.sub;
-				case SODA: food = FoodType.soda;
-				break;
-				default: throw new UnsupportedOperationException("Unknown food count: " + i);
+				Food food = getFood(i);
+				
+				makeFoodThreads.get(orderNumber).put(food, new LinkedList<Thread>());
+				
+				for (int j = 0; j < foodCount[i]; j++) {
+
+					// Find appropriate machine
+					Machine machine = machines.get(food);
+					
+					// Upon submitted request to food machine:
+					Simulation.logEvent(SimulationEvent.cookStartedFood(this, food, orderNumber));
+					
+					Ratsies.singleton.cookStartedFood(this, orderNumber);
+					
+					Thread thread = machine.makeFood(this, food);
+					makeFoodThreads.get(orderNumber).get(food).add(thread);
 				}
-
-				// Find appropriate machine
-				Machine machine = Ratsies.singleton.machines.get(food);
-
-				// Submit each food item
-				synchronized(machine) {
-					machine.makeFood(food, foodCount[i]);
-				}
-
-				// Upon submitted request to food machine:
-				Simulation.logEvent(SimulationEvent.cookStartedFood(this, food, orderNumber));
-
-				// Upon receiving a completed food item:
-				Simulation.logEvent(SimulationEvent.cookFinishedFood(this, food, orderNumber));
-
-				// Upon completing an order:
-				Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, orderNumber));
-
-				// TODO: Once all machines have produced the desired food,  
-				// notify the Customer since the order is complete.
-				order.notify();
-
 			}
+			
+			
+			for (Food food : makeFoodThreads.get(orderNumber).keySet()) {
+				for (Thread thread : makeFoodThreads.get(orderNumber).get(food)) {
+					thread.join();
+					Simulation.logEvent(SimulationEvent.cookFinishedFood(this, food, orderNumber));
+				}
+			}
+			
+			// Upon completing an order:
+			Simulation.logEvent(SimulationEvent.cookCompletedOrder(this, orderNumber));
+			
+			Ratsies.singleton.cookCompletedOrder(this, orderNumber);
 		}
+	}
 
+	private Food getFood(int i) {
+		switch (i) {
+		case WING: return FoodType.wings;
+		case PIZZA: return FoodType.pizza;
+		case SUB: return FoodType.sub;
+		case SODA: return FoodType.soda;
+		default: throw new UnsupportedOperationException("Unknown food count: " + i);
+		}
+	}
 
-		// Just before terminating:
-		Simulation.logEvent(SimulationEvent.cookEnding(this));
+	public String getName() {
+		// TODO Auto-generated method stub
+		return name;
 	}
 }

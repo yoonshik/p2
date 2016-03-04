@@ -9,12 +9,26 @@ package cmsc433.p2;
  */
 
 public class Machine {
-
 	// Types of machines used in Ratsie's.  Recall that enum types are
 	// effectively "static" and "final", so each instance of Machine
 	// will use the same MachineType.
 
-	public enum MachineType { fountain, fryer, grillPress, oven };
+	
+	public static enum MachineType { fountain, fryer, grillPress, oven };
+	
+	public static int getCookingTime (MachineType foodType) {
+		if (foodType == MachineType.fountain) {
+			return 15;
+		} else if (foodType == MachineType.fryer) {
+			return 350;
+		} else if (foodType == MachineType.grillPress) {
+			return 200;
+		} else if (foodType == MachineType.oven) {
+			return 600;
+		} else {
+			throw new UnsupportedOperationException("Unknown food type.");
+		}
+	}
 
 	// Converts Machine instances into strings based on MachineType.
 
@@ -30,7 +44,8 @@ public class Machine {
 
 	public final MachineType machineType;
 	public final Food machineFoodType;
-	public final int capacity;
+	public final Integer capacity;
+	public Integer numCooking;
 
 	//YOUR CODE GOES HERE...
 
@@ -46,10 +61,13 @@ public class Machine {
 	public Machine(MachineType machineType, Food food, int capacityIn) {
 		this.machineType = machineType;
 		this.machineFoodType = food;
-
-		//YOUR CODE GOES HERE...
 		this.capacity = capacityIn;
-
+		this.numCooking = 0;
+		
+		// At startup: 
+		Simulation.logEvent(SimulationEvent.machineStarting(this, food, capacity));
+		
+		//YOUR CODE GOES HERE...
 	}
 
 	/**
@@ -61,35 +79,60 @@ public class Machine {
 	 * the call can proceed.  You will need to implement some means to
 	 * notify the calling Cook when the food item is finished.
 	 */
-	public Object makeFood(Food food, int numItems) {
-		// At startup: 
-		Simulation.logEvent(SimulationEvent.machineStarting(this, food, numItems));
-		// When beginning to make a food item:
-		Simulation.logEvent(SimulationEvent.machineCookingFood(this, food));
-		// When done making a food item: 
-		Simulation.logEvent(SimulationEvent.machineDoneFood(this, food));
-		
-
-		// SimulationEvent.machineEnding()
-
-		// TODO: If the machine is currently at full capacity, block
-		// TODO: Else
-		// 		TODO: Notify the calling cook
-
+	public Thread makeFood(Cook cook, Food food) {
+		Thread thread = new Thread(new CookAnItem(this, cook, food));
+		thread.start();
+		return thread;
+	}
+	
+	private boolean isAvailable() {
+		synchronized(this) {
+			return numCooking < capacity;
+		}
+	}
+	
+	public void shutDown() {
 		// 		When shut down, at the end of the simulation:
 		Simulation.logEvent(SimulationEvent.machineEnding(this));
-
-		// 		TODO: Return
-
-		return null;
 	}
 
-	//THIS MIGHT BE A USEFUL METHOD TO HAVE AND USE BUT IS JUST ONE IDEA
 	private class CookAnItem implements Runnable {
+		Machine machine;
+		Cook cook;
+		Food food;
+		
+		public CookAnItem(Machine machine, Cook cook, Food food) {
+			this.machine = machine;
+			this.cook = cook;
+			this.food = food;
+		}
+		
 		public void run() {
-//			try {
-//				// TODO: YOUR CODE GOES HERE...
-//			} catch(InterruptedException e) { }
+			synchronized(machine) {
+				while (!isAvailable()) {
+					try {
+						machine.wait();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+				// When beginning to make a food item:
+				Simulation.logEvent(SimulationEvent.machineCookingFood(machine, food));
+				numCooking++;
+			}
+			try {
+				Thread.sleep(getCookingTime(machineType));
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			// TODO: Else
+			// 		TODO: Notify the calling cook when finished
+			synchronized(machine){
+				// When done making a food item:
+				Simulation.logEvent(SimulationEvent.machineDoneFood(machine, machineFoodType));
+				numCooking--;
+				machine.notifyAll();
+			}
 		}
 	}
 }

@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -18,18 +20,25 @@ public class Ratsies {
 	private int numTables;
 	private int machineCapacity;
 	private boolean randomOrders;
+	private int numOrders;
+	private int numFinished;
 
 	public List<Customer> tables;
-	public HashMap<Food, Machine> machines;
+	
+	private HashMap<Food, Machine> machines;
 
-	public HashMap<List<Food>, Integer> orderNumbers;
+	public HashMap<Integer, List<Food>> ordersByOrderNumber;
+	public HashMap<Integer, Object> orderLocks;
 
-	public Queue<List<Food>> ordersNew;
-	public HashSet<List<Food>> ordersInProgress;
-	public HashSet<List<Food>> ordersFinished;
+	public LinkedHashSet<Integer> ordersNew;
+	public LinkedHashSet<Integer> ordersInProgress;
 
 	private Thread[] cookThreads;
 	private Thread[] customerThreads;
+
+	private Object numFinishedLock;
+
+	private Object numOrdersLock;
 
 	public Ratsies(int numCustomers, int numCooks,
 			int numTables, 
@@ -46,33 +55,34 @@ public class Ratsies {
 		this.numTables = numTables;
 		this.machineCapacity = machineCapacity;
 		this.randomOrders = randomOrders;
+		this.numOrders = 0;
+		this.numFinished = 0;
+		this.numFinishedLock = new Object();
+		this.numOrdersLock = new Object();
 
-
-	}
-
-	public void runSimulation() {
 		// Set things up you might need
 		tables = new ArrayList<Customer>(numTables);
 		machines = new HashMap<Food, Machine>(machineCapacity);
 
-		orderNumbers = new HashMap<List<Food>, Integer>();
+		ordersByOrderNumber = new HashMap<Integer, List<Food>>();
+		orderLocks = new HashMap<Integer, Object>();
 
-		ordersNew = new PriorityQueue<List<Food>>();
-		ordersInProgress = new HashSet<List<Food>>();
-		ordersFinished = new HashSet<List<Food>>();
-
-		// Start up machines
+		ordersNew = new LinkedHashSet<Integer>();
+		ordersInProgress = new LinkedHashSet<Integer>();
+		
 		machines.put(FoodType.wings, new Machine(Machine.MachineType.fryer, FoodType.wings, machineCapacity));
 		machines.put(FoodType.pizza, new Machine(Machine.MachineType.oven, FoodType.pizza, machineCapacity));
 		machines.put(FoodType.sub, new Machine(Machine.MachineType.grillPress, FoodType.sub, machineCapacity));
 		machines.put(FoodType.soda, new Machine(Machine.MachineType.fountain, FoodType.soda, machineCapacity));
+	}
 
+	public boolean runSimulation() {
 		// Let cooks in
 		cookThreads = new Thread[numCooks];
-		for (int i = 0; i < numCooks; i++) {
-			cookThreads[i] = new Thread(new Cook("Cook" + i));
+		for (int i = 0; i < cookThreads.length; i++) {
+			cookThreads[i] = new Thread(new Cook("Cook "+i, machines));
 		}
-
+		
 		// Build the customers.
 		customerThreads = new Thread[numCustomers];
 		LinkedList<Food> order;
@@ -115,6 +125,11 @@ public class Ratsies {
 		}
 
 
+		for (int i = 0; i < cookThreads.length; i++) {
+			cookThreads[i].start();
+		}
+		
+
 		// Now "let the customers know the shop is open" by
 		//    starting them running in their own thread.
 		for(int i = 0; i < customerThreads.length; i++) {
@@ -125,17 +140,28 @@ public class Ratsies {
 			//      to do - one of these is waiting for an available
 			//      table...
 		}
+		
 
 
 		try {
 			// Wait for customers to finish
 			//   -- you need to add some code here...
+			
+			for (int i = 0; i < customerThreads.length; i++) {
+				customerThreads[i].join();
+			}
 
-
-
-
-
-
+			while (!allOrdersFinished()) {
+				synchronized(numFinishedLock){
+					try {
+						numFinishedLock.wait();
+					} catch(InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+			
+			
 			// Then send cooks home...
 			// The easiest way to do this might be the following, where
 			// we interrupt their threads.  There are other approaches
@@ -155,7 +181,8 @@ public class Ratsies {
 		machines.remove(FoodType.pizza);
 		machines.remove(FoodType.sub);
 		machines.remove(FoodType.soda);
-
+		
+		return true;
 	}
 
 	/**
@@ -167,8 +194,8 @@ public class Ratsies {
 		if (customer == null || tables == null) {
 			return false;
 		}
-		synchronized (tables) {
-			while (tables.size() == numTables) {
+		synchronized(tables) {
+			while (tables.size() >= numTables) {
 				try {
 					tables.wait();
 				} catch (InterruptedException e) {
@@ -183,67 +210,150 @@ public class Ratsies {
 
 	/**
 	 * @param customer
-	 * @param order
-	 * @param orderNumber
-	 * @return true if order is successfully submitted, false otherwise
-	 */
-	public boolean submitOrder(Customer customer, List<Food> order, int orderNumber) {
-		if (customer == null || order == null || ordersNew == null || orderNumbers == null) {
-			return false;
-		}
-		synchronized(orderNumbers) {
-			orderNumbers.put(order, orderNumber);
-		}
-		synchronized(ordersNew) {
-			ordersNew.add(order);
-			ordersNew.notify();
-		}
-
-		return true;
-	}
-
-	/**
-	 * @param customer
 	 * @return true if customer successfully leaves Ratsies, false otherwise. 
 	 */
 	public boolean leaveRatsies(Customer customer) {
 		if (customer == null || tables == null || !tables.contains(customer)) {
 			return false;
 		}
-		synchronized (tables) {
+		synchronized(tables) {
 			tables.remove(customer);
+			tables.notify();
 			tables.notify();
 		}
 		return true;
+	}
+	
+
+	/**
+	 * @param customer
+	 * @param order
+	 * @param orderNumber
+	 * @return true if order is successfully submitted, false otherwise
+	 */
+	public boolean submitOrder(Customer customer, List<Food> order, int orderNumber) {
+		
+		if (customer == null || order == null || ordersNew == null || ordersByOrderNumber == null) {	
+			return false;
+		}
+		
+		synchronized(ordersByOrderNumber) {
+			ordersByOrderNumber.put(orderNumber, order);
+		}
+		
+		synchronized(orderLocks) {
+			orderLocks.put(orderNumber, new Object());
+		}
+		
+		synchronized(ordersNew) {
+			ordersNew.add(orderNumber);
+			synchronized(this) {
+				this.notify();
+				this.notify();
+			}
+			synchronized(numOrdersLock) {
+				numOrders++;
+			}
+			ordersNew.notifyAll();
+			return true;
+		}
+	}
+	
+	public Object getOrderLock(int orderNumber) {
+		synchronized(orderLocks) {
+			return orderLocks.get(orderNumber);
+		}
+	}
+	
+	public void cookStartedFood(Cook cook, Integer orderNumber) {
+		synchronized(getOrderLock(orderNumber)) {
+			synchronized(ordersInProgress) {
+				ordersInProgress.add(orderNumber);
+				getOrderLock(orderNumber).notify();
+				getOrderLock(orderNumber).notify();
+			}
+		}
+	}
+
+	public void cookCompletedOrder(Cook cook, int orderNumber) {
+		synchronized(Ratsies.singleton.getOrderLock(orderNumber)) {
+			synchronized(ordersInProgress) {
+				System.out.println("[DEBUG:] Removing " + orderNumber + " from ordersInProgress");
+				ordersInProgress.remove((Object)orderNumber);
+				System.out.println("[DEBUG:] ordersInProgress empty: " + ordersInProgress.isEmpty());
+				System.out.println("[DEBUG:] ordersInProgress contents: " + ordersInProgress.toString());
+				
+				synchronized(numFinishedLock) {
+					numFinished++;
+					System.out.println("[DEBUG:] " + numFinished);
+				}
+				// Once all machines have produced the desired food,
+				// notify the Customer since the order is complete.				
+			}
+			System.out.println("[DEBUG:] Notifying " + orderNumber + " "+ getOrderLock(orderNumber));
+			getOrderLock(orderNumber).notifyAll();
+		}
 	}
 
 	/**
 	 * 
 	 * @return next order in the queue.
 	 */
-	public List<Food> getNextOrder() {
-		List<Food> order;
+	public Integer getNextOrder() {
+		int orderNumber = -1;
 		synchronized(ordersNew) {
-			while (ordersNew.isEmpty()) {
+			while (ordersNew.isEmpty() && !allOrdersFinished()) {
+				if (allOrdersFinished()) {
+					return null;
+				}
 				try {
 					ordersNew.wait();
 				} catch (InterruptedException e) {
-					e.printStackTrace();
+					
+				}
+				if (allOrdersFinished()) {
+					return null;
 				}
 			}
-			order = ordersNew.remove();
-			synchronized(ordersInProgress) {
-				ordersInProgress.add(order);
+			
+			Iterator<Integer> it = ordersNew.iterator();
+			
+			while (it.hasNext()) {
+				orderNumber = it.next();
+				break;
+			}
+			
+			ordersNew.remove(orderNumber);
+			return orderNumber;
+		}
+	}
+	
+	
+	public boolean newOrderAvailable() {
+		synchronized(ordersNew) {
+			return ordersNew.size() > 0;
+		}
+	}
+
+	public List<Food> getOrder(int orderNumber) {
+		synchronized(ordersByOrderNumber) {
+			return ordersByOrderNumber.get(orderNumber);
+		}
+	}
+	
+	public boolean allOrdersFinished() {
+		synchronized(numFinishedLock) {
+			return numFinished == numCustomers;
+		}
+	}
+	
+	public boolean orderInProgress(int orderNumber) {
+		synchronized(getOrderLock(orderNumber)) {
+			synchronized(ordersNew){
+				synchronized(ordersInProgress) {
+					return (ordersNew.contains(orderNumber) || ordersInProgress.contains(orderNumber));
+				}
 			}
 		}
-		return order;
 	}
-
-	public int getOrderNumber(List<Food> order) {
-		synchronized(orderNumbers) {
-			return Ratsies.singleton.orderNumbers.get(order);
-		}
-	}
-
-
 }
