@@ -13,9 +13,6 @@ public class Simulation {
 	
 	public static List<SimulationEvent> events;
 	
-	
-	
-
 	/**
 	 * Used by other classes in the simulation to log events
 	 * @param event
@@ -101,15 +98,22 @@ public class Simulation {
 		
 		// Run the simulation and then 
 		//   feed the result into the method to validate simulation.
-		System.out.println("Did it work? " + 
-				Validate.validateSimulation(
-						runSimulation(
-								numCustomers, numCooks, 
-								numTables, machineCapacity,
-								randomOrders
-								)
-						)
+		
+		
+		List<SimulationEvent> simulationEvents = runSimulation(
+				numCustomers, numCooks, 
+				numTables, machineCapacity,
+				randomOrders
 				);
+		
+		System.out.println("Did it work? " + 
+				Validate.validateSimulation(simulationEvents));
+		
+		System.out.println("Did it work? " + 
+				Validate2.validateSimulation(simulationEvents));
+		
+		System.out.println("Did it work? " + 
+				Validate3.validateSimulation(simulationEvents));
 	}
 }
 

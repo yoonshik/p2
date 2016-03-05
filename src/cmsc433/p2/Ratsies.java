@@ -10,7 +10,7 @@ import java.util.Random;
 
 public class Ratsies {
 	public static Ratsies singleton;
-	
+
 	private int numCustomers;
 	private int numCooks;
 	private int numTables;
@@ -19,7 +19,7 @@ public class Ratsies {
 	private int numFinished;
 
 	public List<Customer> tables;
-	
+
 	private HashMap<Food, Machine> machines;
 
 	public HashMap<Integer, List<Food>> ordersByOrderNumber;
@@ -34,7 +34,14 @@ public class Ratsies {
 
 	private Object numFinishedLock;
 
-
+	/**
+	 * 
+	 * @param numCustomers
+	 * @param numCooks
+	 * @param numTables
+	 * @param machineCapacity
+	 * @param randomOrders
+	 */
 	public Ratsies(int numCustomers, int numCooks,
 			int numTables, 
 			int machineCapacity,
@@ -44,7 +51,7 @@ public class Ratsies {
 		} else {
 			throw new UnsupportedOperationException();
 		}
-		
+
 		this.numCustomers = numCustomers;
 		this.numCooks = numCooks;
 		this.numTables = numTables;
@@ -63,20 +70,24 @@ public class Ratsies {
 		ordersNew = new LinkedHashSet<Integer>();
 		ordersInProgress = new LinkedHashSet<Integer>();
 		ordersFinished = new LinkedHashSet<Integer>();
-		
+
 		machines.put(FoodType.wings, new Machine(Machine.MachineType.fryer, FoodType.wings, machineCapacity));
 		machines.put(FoodType.pizza, new Machine(Machine.MachineType.oven, FoodType.pizza, machineCapacity));
 		machines.put(FoodType.sub, new Machine(Machine.MachineType.grillPress, FoodType.sub, machineCapacity));
 		machines.put(FoodType.soda, new Machine(Machine.MachineType.fountain, FoodType.soda, machineCapacity));
 	}
 
+	/**
+	 * Run a Ratsies simulation.
+	 * 
+	 */
 	public boolean runSimulation() {
 		// Let cooks in
 		cookThreads = new Thread[numCooks];
 		for (int i = 0; i < cookThreads.length; i++) {
 			cookThreads[i] = new Thread(new Cook("Cook "+i, machines));
 		}
-		
+
 		// Build the customers.
 		customerThreads = new Thread[numCustomers];
 		LinkedList<Food> order;
@@ -118,11 +129,11 @@ public class Ratsies {
 			}
 		}
 
-
+		// Start cook threads.
 		for (int i = 0; i < cookThreads.length; i++) {
 			cookThreads[i].start();
 		}
-		
+
 
 		// Now "let the customers know the shop is open" by
 		//    starting them running in their own thread.
@@ -134,13 +145,11 @@ public class Ratsies {
 			//      to do - one of these is waiting for an available
 			//      table...
 		}
-		
+
 
 
 		try {
 			// Wait for customers to finish
-			//   -- you need to add some code here...
-			
 			for (int i = 0; i < customerThreads.length; i++) {
 				customerThreads[i].join();
 			}
@@ -154,14 +163,13 @@ public class Ratsies {
 					}
 				}
 			}
-			
-			
-			// Then send cooks home...
-			// The easiest way to do this might be the following, where
-			// we interrupt their threads.  There are other approaches
-			// though, so you can change this if you want to.
+
+
+			// Then send cooks home by interrupting the theads.
 			for(int i = 0; i < cookThreads.length; i++)
 				cookThreads[i].interrupt();
+			
+			// Wait for the cooks to finish.
 			for(int i = 0; i < cookThreads.length; i++)
 				cookThreads[i].join();
 
@@ -169,13 +177,12 @@ public class Ratsies {
 		catch(InterruptedException e) {
 			System.out.println("Simulation thread interrupted.");
 		}
-
-		// Shut down machines
-		machines.remove(FoodType.wings);
-		machines.remove(FoodType.pizza);
-		machines.remove(FoodType.sub);
-		machines.remove(FoodType.soda);
 		
+		// Shut down machines
+		Simulation.logEvent(SimulationEvent.machineEnding(machines.remove(FoodType.wings)));
+		Simulation.logEvent(SimulationEvent.machineEnding(machines.remove(FoodType.pizza)));
+		Simulation.logEvent(SimulationEvent.machineEnding(machines.remove(FoodType.sub)));
+		Simulation.logEvent(SimulationEvent.machineEnding(machines.remove(FoodType.soda)));	
 		return true;
 	}
 
@@ -217,28 +224,28 @@ public class Ratsies {
 		}
 		return true;
 	}
-	
+
 
 	/**
 	 * @param customer
 	 * @param order
 	 * @param orderNumber
-	 * @return true if order is successfully submitted, false otherwise
+	 * @return Submits a new order from a customer. Return true if order is successfully submitted, false otherwise.
 	 */
 	public boolean submitOrder(Customer customer, List<Food> order, int orderNumber) {
-		
+
 		if (customer == null || order == null || ordersNew == null || ordersByOrderNumber == null) {	
 			return false;
 		}
-		
+
 		synchronized(ordersByOrderNumber) {
 			ordersByOrderNumber.put(orderNumber, order);
 		}
-		
+
 		synchronized(orderLocks) {
 			orderLocks.put(orderNumber, new Object());
 		}
-		
+
 		synchronized(ordersNew) {
 			ordersNew.add(orderNumber);
 			synchronized(this) {
@@ -249,13 +256,22 @@ public class Ratsies {
 			return true;
 		}
 	}
-	
+
+	/**
+	 * @param orderNumber
+	 * @return the lock associated with the given orderNumber.
+	 */
 	public Object getOrderLock(int orderNumber) {
 		synchronized(orderLocks) {
 			return orderLocks.get(orderNumber);
 		}
 	}
-	
+
+	/**
+	 * Add orderNumber to ordersInProgress.
+	 * @param cook
+	 * @param orderNumber
+	 */
 	public void cookStartedFood(Cook cook, Integer orderNumber) {
 		synchronized(getOrderLock(orderNumber)) {
 			synchronized(ordersInProgress) {
@@ -266,33 +282,34 @@ public class Ratsies {
 		}
 	}
 
+	/**
+	 * Move orderNumber from ordersInProgress to ordersFinished.
+	 * @param cook
+	 * @param orderNumber
+	 * 
+	 */
 	public void cookCompletedOrder(Cook cook, int orderNumber) {
 		synchronized(Ratsies.singleton.getOrderLock(orderNumber)) {
 			synchronized(ordersInProgress) {
-//				System.out.println("[DEBUG:] Removing " + orderNumber + " from ordersInProgress");
 				ordersInProgress.remove((Object)orderNumber);
-//				System.out.println("[DEBUG:] ordersInProgress empty: " + ordersInProgress.isEmpty());
-//				System.out.println("[DEBUG:] ordersInProgress contents: " + ordersInProgress.toString());
-				
+
 				synchronized(ordersFinished) {
 					ordersFinished.add(orderNumber);
 				}
-				
+
 				synchronized(numFinishedLock) {
 					numFinished++;
-//					System.out.println("[DEBUG:] " + numFinished);
-				}
-				// Once all machines have produced the desired food,
-				// notify the Customer since the order is complete.				
+				}			
 			}
-//			System.out.println("[DEBUG:] Notifying " + orderNumber + " "+ getOrderLock(orderNumber));
+			// Once all machines have produced the desired food,
+			// notify the Customer since the order is complete.	
 			getOrderLock(orderNumber).notifyAll();
 		}
 	}
 
 	/**
 	 * 
-	 * @return next order in the queue.
+	 * @return Return a new order that has yet not been started.
 	 */
 	public Integer getNextOrder() {
 		int orderNumber = -1;
@@ -304,44 +321,61 @@ public class Ratsies {
 				try {
 					ordersNew.wait();
 				} catch (InterruptedException e) {
-					
+
 				}
 				if (allOrdersFinished()) {
 					return null;
 				}
 			}
-			
+
 			Iterator<Integer> it = ordersNew.iterator();
-			
+
 			while (it.hasNext()) {
 				orderNumber = it.next();
 				break;
 			}
-			
+
 			ordersNew.remove(orderNumber);
 			return orderNumber;
 		}
 	}
-	
-	
+
+	/**
+	 * Check if there are orders available.
+	 * @return True is there are orders to work on; False otherwise.
+	 */
 	public boolean newOrderAvailable() {
 		synchronized(ordersNew) {
 			return ordersNew.size() > 0;
 		}
 	}
 
+	/**
+	 * Return the order associated with the orderNumber.
+	 * @param orderNumber
+	 * @return
+	 */
 	public List<Food> getOrder(int orderNumber) {
 		synchronized(ordersByOrderNumber) {
 			return ordersByOrderNumber.get(orderNumber);
 		}
 	}
-	
+
+	/**
+	 * 
+	 * @return True if all orders have been completed; False otherwise.
+	 */
 	public boolean allOrdersFinished() {
 		synchronized(numFinishedLock) {
 			return numFinished == numCustomers;
 		}
 	}
-	
+
+	/**
+	 * 
+	 * @param orderNumber
+	 * @return False if the order has been finished; True otherwise.
+	 */
 	public boolean orderInProgress(int orderNumber) {
 		synchronized(getOrderLock(orderNumber)) {
 			synchronized(ordersFinished) {

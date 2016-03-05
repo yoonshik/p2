@@ -11,7 +11,6 @@ import java.util.List;
  * Ratsie's when the order is complete.
  */
 public class Customer implements Runnable {
-	//JUST ONE SET OF IDEAS ON HOW TO SET THINGS UP...
 	private final String name;
 	private final List<Food> order;
 	private final Integer orderNumber;
@@ -32,6 +31,9 @@ public class Customer implements Runnable {
 		}
 	}
 
+	/**
+	 * @return Customer's name.
+	 */
 	public String toString() {
 		return name;
 	}
@@ -47,7 +49,7 @@ public class Customer implements Runnable {
 		// Before entering Ratsie's
 		Simulation.logEvent(SimulationEvent.customerStarting(this));
 		
-		// TODONE: If Ratsie's has a free table, enter Ratsie's
+		// If Ratsie's has a free table, enter Ratsie's
 		Ratsies.singleton.enterRatsies(this);
 		
 		//After entering Ratsie’s:
@@ -56,7 +58,7 @@ public class Customer implements Runnable {
 		// Immediately before placing order:
 		Simulation.logEvent(SimulationEvent.customerPlacedOrder(this, order, orderNumber));
 		
-		// TODONE: Place its order
+		// Place its order
 		Ratsies.singleton.submitOrder(this, order, orderNumber);
 		synchronized(Ratsies.singleton.getOrderLock(orderNumber)) {
 			while (Ratsies.singleton.orderInProgress(orderNumber)){
@@ -73,12 +75,15 @@ public class Customer implements Runnable {
 		// Just before leaving the Ratsie’s:
 		Simulation.logEvent(SimulationEvent.customerLeavingRatsies(this));
 		
-		// TODONE: When the order is complete, leave Ratsie's
+		// When the order is complete, leave Ratsie's
 		Ratsies.singleton.leaveRatsies(this);
 	}
 
+	/**
+	 * 
+	 * @return Customer's name.
+	 */
 	public String getName() {
-		// TODO Auto-generated method stub
 		return name;
 	}
 }

@@ -17,6 +17,11 @@ public class Machine {
 		fountain, fryer, grillPress, oven
 	};
 
+	/**
+	 * 
+	 * @param foodType
+	 * @return The amount of time it takes to cook the foodType.
+	 */
 	public static int getCookingTime(MachineType foodType) {
 		if (foodType == MachineType.fountain) {
 			return 15;
@@ -32,7 +37,6 @@ public class Machine {
 	}
 
 	// Converts Machine instances into strings based on MachineType.
-
 	public String toString() {
 		switch (machineType) {
 		case fountain:
@@ -53,8 +57,6 @@ public class Machine {
 	public final Integer capacity;
 	public Integer numCooking;
 
-	// YOUR CODE GOES HERE...
-
 	/**
 	 * The constructor takes at least the type of the machine, the Food item it
 	 * makes, and its capacity. You may extend it with other arguments, if you
@@ -70,8 +72,6 @@ public class Machine {
 
 		// At startup:
 		Simulation.logEvent(SimulationEvent.machineStarting(this, food, capacity));
-
-		// YOUR CODE GOES HERE...
 	}
 
 	/**
@@ -82,6 +82,7 @@ public class Machine {
 	 * return, so the Cook making the call can proceed. You will need to
 	 * implement some means to notify the calling Cook when the food item is
 	 * finished.
+	 * @return The CookAnItem thread on which the calling cook can join.
 	 */
 	public Thread makeFood(Food food) {
 		Thread thread = new Thread(new CookAnItem(this, food));
@@ -89,17 +90,23 @@ public class Machine {
 		return thread;
 	}
 
+	/**
+	 * 
+	 * @return True if the machine is below max capacity; False otherwise.
+	 */
 	private boolean isAvailable() {
 		synchronized (this) {
 			return numCooking < capacity;
 		}
 	}
-
-	public void shutDown() {
-		// When shut down, at the end of the simulation:
-		Simulation.logEvent(SimulationEvent.machineEnding(this));
-	}
-
+	
+	/**
+	 * A Runnable class that represents a food item whenever makeFood() is called. 
+	 * For each food item, a thread is spawned and waits for a specified cook time. 
+	 * When finished, it notifies the cook who called makeFood().
+	 * @author yoonshik
+	 *
+	 */
 	private class CookAnItem implements Runnable {
 		Machine machine;
 		Food food;
@@ -127,8 +134,7 @@ public class Machine {
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
-			// TODO: Else
-			// TODO: Notify the calling cook when finished
+			// Notify the calling cook when finished
 			synchronized (machine) {
 				// When done making a food item:
 				Simulation.logEvent(SimulationEvent.machineDoneFood(machine, machineFoodType));

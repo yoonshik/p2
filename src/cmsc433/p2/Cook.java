@@ -35,7 +35,10 @@ public class Cook implements Runnable {
 		
 		this.makeFoodThreads = new HashMap<Integer, HashMap<Food, LinkedList<Thread>>>();
 	}
-
+	
+	/**
+	 * @return Cook's name.
+	 */
 	public String toString() {
 		return name;
 	}
@@ -77,6 +80,12 @@ public class Cook implements Runnable {
 		}
 	}
 
+	/**
+	 * Process a List<Food> order. Spawn a new thread for each food item using makeFood(), and join at the end.
+	 * @param order
+	 * @param orderNumber
+	 * @throws InterruptedException
+	 */
 	private void processOrder(List<Food> order, Integer orderNumber) throws InterruptedException{
 		
 		synchronized(Ratsies.singleton.getOrderLock(orderNumber)) {
@@ -121,6 +130,7 @@ public class Cook implements Runnable {
 			}
 			
 			
+			//Join all makeFoodThreads.
 			for (Food food : makeFoodThreads.get(orderNumber).keySet()) {
 				for (Thread thread : makeFoodThreads.get(orderNumber).get(food)) {
 					thread.join();
@@ -135,18 +145,26 @@ public class Cook implements Runnable {
 		}
 	}
 
-	private Food getFood(int i) {
-		switch (i) {
+	/**
+	 * 
+	 * @param foodNumber
+	 * @return Food type associated with the food number.
+	 */
+	private Food getFood(int foodNumber) {
+		switch (foodNumber) {
 		case WING: return FoodType.wings;
 		case PIZZA: return FoodType.pizza;
 		case SUB: return FoodType.sub;
 		case SODA: return FoodType.soda;
-		default: throw new UnsupportedOperationException("Unknown food count: " + i);
+		default: throw new UnsupportedOperationException("Unknown food count: " + foodNumber);
 		}
 	}
 
+	/**
+	 * 
+	 * @return Cook's name.
+	 */
 	public String getName() {
-		// TODO Auto-generated method stub
 		return name;
 	}
 }
